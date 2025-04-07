@@ -57,7 +57,7 @@ function Chat({ username, onLogout }) {
   const fetchPrivateMessages = async (receiver) => {
     try {
       const res = await axios.get(
-        `http://localhost:5000/messages/private?user1=${username}&user2=${receiver}`
+        `http://localhost:5000/privateMessages?user1=${username}&user2=${receiver}`
       );
       setPrivateMessages((prev) => ({
         ...prev,

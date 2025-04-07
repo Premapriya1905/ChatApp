@@ -7,6 +7,8 @@ const {Server} = require('socket.io')
 const authRoutes = require("./routes/auth");
 const Message = require('./models/Message');
 const messageRoutes = require("./routes/messages");
+const PrivateMessage = require("./models/PrivateMessage")
+const privateMessagesRoutes = require("./routes/privateMessages")
 
 dotenv.config()
 
@@ -24,7 +26,8 @@ const io = new Server(server, {
 app.use(cors())
 app.use(express.json())
 app.use("/auth", authRoutes);
-app.use("/messages", messageRoutes);
+app.use("/messages", messageRoutes);        
+app.use("/privateMessages", privateMessagesRoutes);
 
 require("dotenv").config();
 
@@ -42,8 +45,7 @@ io.on("connection", (socket) => {
     socket.on("joinChat", async (username) => {
         onlineUsers[socket.id] = username;
         io.emit("userList", Object.values(onlineUsers));
-    
-        // Send chat history to the newly joined user
+
         const chatHistory = await Message.find().sort({ timestamp: 1 }).limit(50);
         socket.emit("chatHistory", chatHistory);
     });
@@ -54,26 +56,34 @@ io.on("connection", (socket) => {
             message: text || null,
             audio: audio || null,
         });
-    
+
         await newMessage.save();
-    
         io.emit("receiveMessage", { username, text, audio });
     });
-    
 
-    socket.on("sendPrivateMessage", ({ receiver, message }) => {
+    // 🔧sendPrivateMessage handler to also save the private message
+    socket.on("sendPrivateMessage", async ({ receiver, message }) => {
+        const sender = onlineUsers[socket.id];
         const receiverSocket = Object.keys(onlineUsers).find(key => onlineUsers[key] === receiver);
-        if (receiverSocket) {
-            io.to(receiverSocket).emit("receivePrivateMessage", { sender: onlineUsers[socket.id], message });
+    
+        try {
+            await PrivateMessage.create({ sender, receiver, message });
+    
+            if (receiverSocket) {
+                io.to(receiverSocket).emit("receivePrivateMessage", { sender, message });
+            }
+        } catch (err) {
+            console.error("❌ Failed to save private message:", err);
         }
     });
+        
 
     socket.on("disconnect", () => {
-                console.log("🔴 User Disconnected:", socket.id);
-                delete onlineUsers[socket.id];
-                io.emit("userList", Object.values(onlineUsers));
-            });
-        });
+        console.log("🔴 User Disconnected:", socket.id);
+        delete onlineUsers[socket.id];
+        io.emit("userList", Object.values(onlineUsers));
+    });
+});
         
 server.listen(5000, () => console.log("🚀 Server running on port 5000"));
         

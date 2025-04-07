@@ -4,7 +4,7 @@ import Register from './components/Register';
 import Chat from './components/Chat';
 
 function App() {
-  const [page, setPage] = useState('register');
+  const [page, setPage] = useState('register'); // always start at register
   const [username, setUsername] = useState(localStorage.getItem('username'));
 
   useEffect(() => {
@@ -25,16 +25,21 @@ function App() {
   const handleLogout = () => {
     localStorage.clear();
     setUsername(null);
-    setPage('login');
+    setPage('register'); // go back to register after logout
   };
 
   if (!username) {
     return page === 'login' ? (
-      <Login onLogin={handleLogin} />
+      <Login
+        onLogin={handleLogin}
+        onSwitchToRegister={() => setPage('register')}
+      />
     ) : (
-      <Register onRegister={() => setPage('login')} />
+      <Register
+        onRegister={() => setPage('login')}
+        onSwitchToLogin={() => setPage('login')}
+      />
     );
-    return <Login onLogin={handleLogin}/>
   }
 
   return <Chat username={username} onLogout={handleLogout} />;
