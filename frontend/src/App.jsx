@@ -29,11 +29,11 @@ function App() {
   };
 
   if (!username) {
-    // return page === 'login' ? (
-    //   <Login onLogin={handleLogin} />
-    // ) : (
-    //   <Register onRegister={() => setPage('login')} />
-    // );
+    return page === 'login' ? (
+      <Login onLogin={handleLogin} />
+    ) : (
+      <Register onRegister={() => setPage('login')} />
+    );
     return <Login onLogin={handleLogin}/>
   }
 
