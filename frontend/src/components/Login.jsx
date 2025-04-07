@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-function Login({ onLogin }) {
+function Login({ onLogin, onSwitchToRegister }) {
   const [contact, setContact] = useState('');
   const [password, setPassword] = useState('');
 
@@ -13,9 +13,9 @@ function Login({ onLogin }) {
       });
 
       localStorage.setItem('token', res.data.token);
-      localStorage.setItem('username', res.data.username); 
-      localStorage.setItem('contact', contact);       
-      onLogin(res.data.username); 
+      localStorage.setItem('username', res.data.username);
+      localStorage.setItem('contact', contact);
+      onLogin(res.data.username);
     } catch (err) {
       console.error(err.response?.data || err.message);
       alert('Login failed: ' + (err.response?.data?.error || 'Unknown error'));
@@ -44,6 +44,15 @@ function Login({ onLogin }) {
       >
         Login
       </button>
+      <p className="mt-4 text-sm">
+        Haven’t registered?{' '}
+        <span
+          className="text-blue-400 underline cursor-pointer"
+          onClick={onSwitchToRegister}
+        >
+          Register
+        </span>
+      </p>
     </div>
   );
 }

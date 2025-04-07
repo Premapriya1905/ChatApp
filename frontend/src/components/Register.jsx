@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-function Register({ onRegister }) {
+function Register({ onRegister, onSwitchToLogin }) {
   const [username, setUserName] = useState('');
   const [contact, setContact] = useState('');
   const [password, setPassword] = useState('');
@@ -14,7 +14,7 @@ function Register({ onRegister }) {
         password,
       });
       alert('Registered successfully! Please login.');
-      onRegister(); // move to login page
+      onRegister(); 
     } catch (err) {
       console.error(err.response?.data || err.message);
       alert('Registration failed: ' + (err.response?.data?.error || 'Unknown error'));
@@ -49,6 +49,15 @@ function Register({ onRegister }) {
       >
         Join Chat
       </button>
+      <p className="mt-4 text-sm">
+        Already registered?{' '}
+        <span
+          className="text-green-400 underline cursor-pointer"
+          onClick={onSwitchToLogin}
+        >
+          Login
+        </span>
+      </p>
     </div>
   );
 }
