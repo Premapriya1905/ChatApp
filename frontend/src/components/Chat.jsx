@@ -35,7 +35,7 @@ function Chat({ username, onLogout }) {
         ...prev,
         [msg.sender]: [...(prev[msg.sender] || []), msg],
       }));
-
+    
       if (msg.sender !== activeChat) {
         setUnreadMessages((prev) => ({ ...prev, [msg.sender]: true }));
       }
@@ -78,30 +78,47 @@ function Chat({ username, onLogout }) {
   };
 
   const sendMessage = () => {
-    if (!message.trim()) return;
-
+    if (!message.trim() && !audioURL) return;
+  
     if (editingId) {
       handleUpdateMessage();
       return;
     }
-
-    if (activeChat === "group") {
-      socket.emit("sendMessage", { sender: username, text: message, audio: null });
+  
+    if (isGroupChat) {
+      socket.emit("sendMessage", {
+        sender: username,
+        text: message,
+        audio: audioURL,
+      });
     } else {
       socket.emit("sendPrivateMessage", {
         sender: username,
         receiver: activeChat,
         message,
-        audio: null,
+        audio: audioURL,
       });
+    }
+  
+    // Optimistic local update
+    if (!isGroupChat) {
       setPrivateMessages((prev) => ({
         ...prev,
-        [activeChat]: [...(prev[activeChat] || []), { sender: username, message }],
+        [activeChat]: [
+          ...(prev[activeChat] || []),
+          {
+            sender: username,
+            receiver: activeChat,
+            message,
+            audio: audioURL,
+          },
+        ],
       }));
     }
-
+  
     setMessage("");
-  };
+    setAudioURL(null);
+  };  
 
   const handleUpdateMessage = async () => {
     try {
@@ -172,8 +189,28 @@ function Chat({ username, onLogout }) {
       const blob = new Blob(chunks, { type: "audio/webm" });
       const url = URL.createObjectURL(blob);
       setAudioURL(url);
-      socket.emit("sendMessage", { username, audio: url });
+    
+      // Send message right after recording ends
+      if (isGroupChat) {
+        socket.emit("sendMessage", { sender: username, text: "", audio: url });
+      } else {
+        socket.emit("sendPrivateMessage", {
+          sender: username,
+          receiver: activeChat,
+          message: "",
+          audio: url,
+        });
+    
+        setPrivateMessages((prev) => ({
+          ...prev,
+          [activeChat]: [
+            ...(prev[activeChat] || []),
+            { sender: username, receiver: activeChat, message: "", audio: url },
+          ],
+        }));
+      }
     };
+    
     mediaRecorderRef.current.start();
     setRecording(true);
   };
@@ -261,8 +298,8 @@ function Chat({ username, onLogout }) {
 
         {/* Messages */}
         <div className="flex-1 overflow-auto bg-gray-800 p-4 rounded-lg">
-          {currentMessages.map((msg) => (
-            <div key={msg._id} className="mb-2 flex items-start justify-between">
+        {currentMessages.map((msg, index) => (
+          <div key={msg._id || `${msg.sender}-${index}`} className="mb-2 flex items-start justify-between">
               <div>
                 <strong>{msg.sender || msg.username}:</strong>{" "}
                 {editingId === msg._id ? (
