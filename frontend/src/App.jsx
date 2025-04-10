@@ -25,7 +25,7 @@ function App() {
   const handleLogout = () => {
     localStorage.clear();
     setUsername(null);
-    setPage('register'); // go back to register after logout
+    setPage('register'); 
   };
 
   if (!username) {
