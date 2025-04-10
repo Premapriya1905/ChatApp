@@ -3,7 +3,8 @@ const mongoose = require("mongoose");
 const PrivateMessageSchema = new mongoose.Schema({
   sender: { type: String, required: true },
   receiver: { type: String, required: true },
-  message: { type: String, default: "" },
+  message: { type: String, required: true },
+  isEdited: { type: Boolean, default: false },
   timestamp: { type: Date, default: Date.now },
 });
 

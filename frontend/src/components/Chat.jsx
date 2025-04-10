@@ -1,9 +1,11 @@
+// Chat.jsx
 import io from "socket.io-client";
 import React, { useState, useEffect, useRef } from "react";
 import { BsFillMicFill, BsFillSendFill } from "react-icons/bs";
 import { FaSmile } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
 import axios from "axios";
+import { Pencil, Trash, SendHorizonal, X } from "lucide-react";
 
 const socket = io("http://localhost:5000");
 
@@ -15,8 +17,11 @@ function Chat({ username, onLogout }) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [recording, setRecording] = useState(false);
   const [audioURL, setAudioURL] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editingMessage, setEditingMessage] = useState("");
   const mediaRecorderRef = useRef(null);
   const [activeChat, setActiveChat] = useState("group");
+  const [unreadMessages, setUnreadMessages] = useState({});
 
   useEffect(() => {
     socket.emit("joinChat", username);
@@ -30,6 +35,10 @@ function Chat({ username, onLogout }) {
         ...prev,
         [msg.sender]: [...(prev[msg.sender] || []), msg],
       }));
+
+      if (msg.sender !== activeChat) {
+        setUnreadMessages((prev) => ({ ...prev, [msg.sender]: true }));
+      }
     });
 
     socket.on("chatHistory", (history) => {
@@ -71,13 +80,19 @@ function Chat({ username, onLogout }) {
   const sendMessage = () => {
     if (!message.trim()) return;
 
+    if (editingId) {
+      handleUpdateMessage();
+      return;
+    }
+
     if (activeChat === "group") {
-      socket.emit("sendMessage", { username, text: message });
+      socket.emit("sendMessage", { sender: username, text: message, audio: null });
     } else {
       socket.emit("sendPrivateMessage", {
         sender: username,
         receiver: activeChat,
         message,
+        audio: null,
       });
       setPrivateMessages((prev) => ({
         ...prev,
@@ -87,6 +102,62 @@ function Chat({ username, onLogout }) {
 
     setMessage("");
   };
+
+  const handleUpdateMessage = async () => {
+    try {
+      const url =
+        activeChat === "group"
+          ? `http://localhost:5000/messages/group/${editingId}`
+          : `http://localhost:5000/privateMessages/${editingId}`;
+      const body =
+        activeChat === "group" ? { text: message } : { message };
+
+      const res = await axios.put(url, body);
+
+      if (activeChat === "group") {
+        setGroupMessages((prev) =>
+          prev.map((msg) => (msg._id === editingId ? res.data : msg))
+        );
+      } else {
+        setPrivateMessages((prev) => ({
+          ...prev,
+          [activeChat]: prev[activeChat].map((msg) =>
+            msg._id === editingId ? res.data : msg
+          ),
+        }));
+      }
+
+      setEditingId(null);
+      setMessage("");
+    } catch (err) {
+      console.error("Edit failed:", err);
+    }
+  };
+
+  const deleteMessage = async (id) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this message?");
+    if (!confirmDelete) return;
+  
+    const url =
+      activeChat === "group"
+        ? `http://localhost:5000/messages/group/${id}`
+        : `http://localhost:5000/privateMessages/${id}`;
+  
+    try {
+      await axios.delete(url);
+      if (activeChat === "group") {
+        setGroupMessages((prev) => prev.filter((msg) => msg._id !== id));
+      } else {
+        setPrivateMessages((prev) => ({
+          ...prev,
+          [activeChat]: prev[activeChat].filter((msg) => msg._id !== id),
+        }));
+      }
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
+  };
+  
 
   const handleEmojiClick = (emoji) => {
     setMessage((prev) => prev + emoji.emoji);
@@ -112,14 +183,15 @@ function Chat({ username, onLogout }) {
     setRecording(false);
   };
 
-  const currentMessages =
-    activeChat === "group" ? groupMessages : privateMessages[activeChat] || [];
+  const isGroupChat = activeChat === "group";
+  const currentMessages = isGroupChat
+    ? groupMessages
+    : privateMessages[activeChat] || [];
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">
       {/* Sidebar */}
       <div className="w-1/4 p-4 bg-gray-800 border-r border-gray-700 flex flex-col">
-        {/* Profile */}
         <div className="mb-6 flex items-center gap-3 p-3 rounded bg-gray-700">
           <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center font-bold">
             {username[0].toUpperCase()}
@@ -130,7 +202,6 @@ function Chat({ username, onLogout }) {
           </div>
         </div>
 
-        {/* Group Chat */}
         <div className="mb-4">
           <div className="text-xs uppercase text-gray-400 mb-1">Group Chat</div>
           <div
@@ -143,7 +214,6 @@ function Chat({ username, onLogout }) {
           </div>
         </div>
 
-        {/* Private Chats */}
         <div className="flex-1 overflow-auto">
           <div className="text-xs uppercase text-gray-400 mb-1">Private Chats</div>
           {users.map((user) => (
@@ -152,16 +222,27 @@ function Chat({ username, onLogout }) {
               className={`p-3 rounded hover:bg-gray-700 cursor-pointer ${
                 activeChat === user ? "bg-gray-600" : ""
               }`}
-              onClick={() => setActiveChat(user)}
+              onClick={() => {
+                setActiveChat(user);
+                setUnreadMessages((prev) => ({ ...prev, [user]: false }));
+              }}
             >
               {user}
+              {unreadMessages[user] && (
+                <span className="ml-2 text-xs bg-red-500 px-2 py-0.5 rounded-full">
+                  New
+                </span>
+              )}
             </div>
           ))}
         </div>
 
         <button
           className="mt-4 bg-red-500 text-white px-3 py-1 rounded"
-          onClick={onLogout}
+          onClick={()=>{
+            const confirmLogout = window.confirm("Confirm Logout?");
+            if (confirmLogout) onLogout();
+          }}
         >
           Logout
         </button>
@@ -169,7 +250,6 @@ function Chat({ username, onLogout }) {
 
       {/* Chat Window */}
       <div className="flex flex-col w-3/4 p-4">
-        {/* Header */}
         <div className="flex items-center gap-2 border-b border-gray-700 pb-2 mb-4">
           <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center font-bold">
             {activeChat === "group" ? "C" : activeChat[0]?.toUpperCase()}
@@ -181,13 +261,57 @@ function Chat({ username, onLogout }) {
 
         {/* Messages */}
         <div className="flex-1 overflow-auto bg-gray-800 p-4 rounded-lg">
-          {currentMessages.map((msg, index) => (
-            <div key={index} className="mb-2">
-              <strong>{msg.sender || msg.username}:</strong> {msg.message || msg.text}
-              {msg.audio && (
-                <audio controls className="ml-2">
-                  <source src={msg.audio} type="audio/webm" />
-                </audio>
+          {currentMessages.map((msg) => (
+            <div key={msg._id} className="mb-2 flex items-start justify-between">
+              <div>
+                <strong>{msg.sender || msg.username}:</strong>{" "}
+                {editingId === msg._id ? (
+                  <input
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    className="p-1 text-black rounded"
+                  />
+                ) : (
+                  <>
+                    {msg.message || msg.text}
+                    {msg.isEdited && (
+                      <span className="text-xs text-gray-400 ml-2">(edited)</span>
+                    )}
+                  </>
+                )}
+                {msg.audio && (
+                  <audio controls className="block mt-1">
+                    <source src={msg.audio} type="audio/webm" />
+                  </audio>
+                )}
+              </div>
+              {msg.sender === username && (
+                <div className="flex gap-2 ml-2">
+                  {editingId === msg._id ? (
+                    <X
+                      size={18}
+                      className="cursor-pointer text-red-400"
+                      onClick={() => {
+                        setEditingId(null);
+                        setMessage("");
+                      }}
+                    />
+                  ) : (
+                    <Pencil
+                      size={18}
+                      className="cursor-pointer text-yellow-400"
+                      onClick={() => {
+                        setEditingId(msg._id);
+                        setMessage(msg.message || msg.text);
+                      }}
+                    />
+                  )}
+                  <Trash
+                    size={18}
+                    className="cursor-pointer text-red-400"
+                    onClick={() => deleteMessage(msg._id)}
+                  />
+                </div>
               )}
             </div>
           ))}
@@ -208,10 +332,13 @@ function Chat({ username, onLogout }) {
             className="flex-1 p-2 rounded bg-gray-700 border border-gray-600"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") sendMessage();
+            }}
             placeholder="Type a message..."
           />
           <button className="bg-blue-500 p-3 rounded" onClick={sendMessage}>
-            <BsFillSendFill size={20} />
+            {editingId ? <SendHorizonal /> : <BsFillSendFill size={20} />}
           </button>
           {recording ? (
             <button className="bg-red-500 p-3 rounded" onClick={stopRecording}>

@@ -62,20 +62,22 @@ io.on("connection", (socket) => {
     });
 
     // 🔧sendPrivateMessage handler to also save the private message
-    socket.on("sendPrivateMessage", async ({ receiver, message }) => {
-        const sender = onlineUsers[socket.id];
-        const receiverSocket = Object.keys(onlineUsers).find(key => onlineUsers[key] === receiver);
-    
+    socket.on("sendPrivateMessage", async ({ sender, receiver, message, audio }) => {
         try {
-            await PrivateMessage.create({ sender, receiver, message });
-    
-            if (receiverSocket) {
-                io.to(receiverSocket).emit("receivePrivateMessage", { sender, message });
-            }
+          await PrivateMessage.create({ sender, receiver, message, audio });
+      
+          const receiverSocket = Object.keys(onlineUsers).find(
+            (key) => onlineUsers[key] === receiver
+          );
+          
+          if (receiverSocket) {
+            io.to(receiverSocket).emit("receivePrivateMessage", { sender, message, audio });
+          }
         } catch (err) {
-            console.error("❌ Failed to save private message:", err);
+          console.error("❌ Failed to save private message:", err);
         }
-    });
+      });
+      
         
 
     socket.on("disconnect", () => {
