@@ -50,33 +50,53 @@ io.on("connection", (socket) => {
         socket.emit("chatHistory", chatHistory);
     });
 
-    socket.on("sendMessage", async ({ username, text, audio }) => {
+    socket.on("sendMessage", async ({ sender, text, audio }) => {
         const newMessage = new Message({
-            sender: username,
+            sender,
             message: text || null,
+            receiver: 'Curatales',
             audio: audio || null,
         });
 
         await newMessage.save();
-        io.emit("receiveMessage", { username, text, audio });
+        io.emit("receiveMessage", { sender, text, audio });
     });
 
     // 🔧sendPrivateMessage handler to also save the private message
+    
     socket.on("sendPrivateMessage", async ({ sender, receiver, message, audio }) => {
-        try {
-          await PrivateMessage.create({ sender, receiver, message, audio });
-      
-          const receiverSocket = Object.keys(onlineUsers).find(
-            (key) => onlineUsers[key] === receiver
-          );
-          
-          if (receiverSocket) {
-            io.to(receiverSocket).emit("receivePrivateMessage", { sender, message, audio });
-          }
-        } catch (err) {
-          console.error("❌ Failed to save private message:", err);
+      try {
+        const saved = await PrivateMessage.create({ sender, receiver, message, audio });
+    
+        const receiverSocketId = Object.keys(onlineUsers).find(
+          (key) => onlineUsers[key] === receiver
+        );
+    
+        const payload = {
+          _id: saved._id,
+          sender,
+          receiver,
+          message,
+          audio,
+        };
+    
+        // Emit to receiver if online
+        if (receiverSocketId) {
+          io.to(receiverSocketId).emit("receivePrivateMessage", payload);
         }
-      });
+    
+        // Emit to sender as well (for local sync)
+        const senderSocketId = Object.keys(onlineUsers).find(
+          (key) => onlineUsers[key] === sender
+        );
+        if (senderSocketId) {
+          io.to(senderSocketId).emit("receivePrivateMessage", payload);
+        }
+      } catch (err) {
+        console.error("❌ Failed to save private message:", err);
+      }
+    });
+    
       
         
 
