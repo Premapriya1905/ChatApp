@@ -1,7 +1,6 @@
-// Chat.jsx
 import io from "socket.io-client";
 import React, { useState, useEffect, useRef } from "react";
-import { BsFillMicFill, BsFillSendFill } from "react-icons/bs";
+import { BsFillSendFill } from "react-icons/bs";
 import { FaSmile } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
 import axios from "axios";
@@ -15,11 +14,8 @@ function Chat({ username, onLogout }) {
   const [privateMessages, setPrivateMessages] = useState({});
   const [users, setUsers] = useState([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [audioURL, setAudioURL] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editingMessage, setEditingMessage] = useState("");
-  const mediaRecorderRef = useRef(null);
   const [activeChat, setActiveChat] = useState("group");
   const [unreadMessages, setUnreadMessages] = useState({});
 
@@ -78,28 +74,26 @@ function Chat({ username, onLogout }) {
   };
 
   const sendMessage = () => {
-    if (!message.trim() && !audioURL) return;
-  
+    if (!message.trim()) return;
+
     if (editingId) {
       handleUpdateMessage();
       return;
     }
-  
+
     if (isGroupChat) {
       socket.emit("sendMessage", {
         sender: username,
         text: message,
-        audio: audioURL,
       });
     } else {
       socket.emit("sendPrivateMessage", {
         sender: username,
         receiver: activeChat,
         message,
-        audio: audioURL,
       });
     }
-  
+
     // Optimistic local update
     if (!isGroupChat) {
       setPrivateMessages((prev) => ({
@@ -110,15 +104,13 @@ function Chat({ username, onLogout }) {
             sender: username,
             receiver: activeChat,
             message,
-            audio: audioURL,
           },
         ],
       }));
     }
-  
+
     setMessage("");
-    setAudioURL(null);
-  };  
+  };
 
   const handleUpdateMessage = async () => {
     try {
@@ -154,12 +146,12 @@ function Chat({ username, onLogout }) {
   const deleteMessage = async (id) => {
     const confirmDelete = window.confirm("Are you sure you want to delete this message?");
     if (!confirmDelete) return;
-  
+
     const url =
       activeChat === "group"
         ? `http://localhost:5000/messages/group/${id}`
         : `http://localhost:5000/privateMessages/${id}`;
-  
+
     try {
       await axios.delete(url);
       if (activeChat === "group") {
@@ -174,50 +166,9 @@ function Chat({ username, onLogout }) {
       console.error("Delete failed:", err);
     }
   };
-  
 
   const handleEmojiClick = (emoji) => {
     setMessage((prev) => prev + emoji.emoji);
-  };
-
-  const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorderRef.current = new MediaRecorder(stream);
-    const chunks = [];
-    mediaRecorderRef.current.ondataavailable = (e) => chunks.push(e.data);
-    mediaRecorderRef.current.onstop = () => {
-      const blob = new Blob(chunks, { type: "audio/webm" });
-      const url = URL.createObjectURL(blob);
-      setAudioURL(url);
-    
-      // Send message right after recording ends
-      if (isGroupChat) {
-        socket.emit("sendMessage", { sender: username, text: "", audio: url });
-      } else {
-        socket.emit("sendPrivateMessage", {
-          sender: username,
-          receiver: activeChat,
-          message: "",
-          audio: url,
-        });
-    
-        setPrivateMessages((prev) => ({
-          ...prev,
-          [activeChat]: [
-            ...(prev[activeChat] || []),
-            { sender: username, receiver: activeChat, message: "", audio: url },
-          ],
-        }));
-      }
-    };
-    
-    mediaRecorderRef.current.start();
-    setRecording(true);
-  };
-
-  const stopRecording = () => {
-    mediaRecorderRef.current.stop();
-    setRecording(false);
   };
 
   const isGroupChat = activeChat === "group";
@@ -276,7 +227,7 @@ function Chat({ username, onLogout }) {
 
         <button
           className="mt-4 bg-red-500 text-white px-3 py-1 rounded"
-          onClick={()=>{
+          onClick={() => {
             const confirmLogout = window.confirm("Confirm Logout?");
             if (confirmLogout) onLogout();
           }}
@@ -298,8 +249,8 @@ function Chat({ username, onLogout }) {
 
         {/* Messages */}
         <div className="flex-1 overflow-auto bg-gray-800 p-4 rounded-lg">
-        {currentMessages.map((msg, index) => (
-          <div key={msg._id || `${msg.sender}-${index}`} className="mb-2 flex items-start justify-between">
+          {currentMessages.map((msg, index) => (
+            <div key={msg._id || `${msg.sender}-${index}`} className="mb-2 flex items-start justify-between">
               <div>
                 <strong>{msg.sender || msg.username}:</strong>{" "}
                 {editingId === msg._id ? (
@@ -315,11 +266,6 @@ function Chat({ username, onLogout }) {
                       <span className="text-xs text-gray-400 ml-2">(edited)</span>
                     )}
                   </>
-                )}
-                {msg.audio && (
-                  <audio controls className="block mt-1">
-                    <source src={msg.audio} type="audio/webm" />
-                  </audio>
                 )}
               </div>
               {msg.sender === username && (
@@ -377,15 +323,6 @@ function Chat({ username, onLogout }) {
           <button className="bg-blue-500 p-3 rounded" onClick={sendMessage}>
             {editingId ? <SendHorizonal /> : <BsFillSendFill size={20} />}
           </button>
-          {recording ? (
-            <button className="bg-red-500 p-3 rounded" onClick={stopRecording}>
-              ⏹
-            </button>
-          ) : (
-            <button className="bg-green-500 p-3 rounded" onClick={startRecording}>
-              <BsFillMicFill size={20} />
-            </button>
-          )}
         </div>
       </div>
     </div>
