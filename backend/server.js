@@ -17,22 +17,40 @@ app.use(express.json());
 
 const server = http.createServer(app);
 
+
 const io = new Server(server, {
-    cors: {
-        origin: "http://localhost:5173",
-        methods: ["GET", "POST"]
-    }
+  cors: {
+    origin: [
+      "http://localhost:5173",
+      "https://rad-crisp-9bd9a7.netlify.app"
+    ],
+    methods: ["GET", "POST"],
+    credentials: true
+  }
 });
+
+
+const allowedOrigins = [
+  "http://localhost:5173", 
+  "https://rad-crisp-9bd9a7.netlify.app" 
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true
+}));
 
 app.use(cors());
 app.use(express.json());
 app.use("/auth", authRoutes);
 app.use("/messages", messageRoutes);
 app.use("/privateMessages", privateMessagesRoutes);
-
-// Removed: audio upload serving and redundant messages route
-// app.use("/uploads", express.static("uploads"));
-// app.use("/api/messages", require("./routes/messages"));
 
 mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log("✅ MongoDB Connected"))
@@ -92,6 +110,64 @@ io.on("connection", (socket) => {
             console.error("❌ Failed to save private message:", err);
         }
     });
+
+    // Handle editing group messages
+    socket.on("editGroupMessage", async ({ messageId, newText }) => {
+      try {
+        const updated = await Message.findByIdAndUpdate(
+          messageId,
+          { message: newText, isEdited: true },
+          { new: true }
+        );
+        io.emit("groupMessageEdited", updated); // Broadcast to all clients
+      } catch (err) {
+        console.error("Edit group message failed:", err);
+      }
+    });
+
+    // Handle deleting group messages
+    socket.on("deleteGroupMessage", async (messageId) => {
+      try {
+        await Message.findByIdAndDelete(messageId);
+        io.emit("groupMessageDeleted", messageId); // Notify all clients
+      } catch (err) {
+        console.error("Delete group message failed:", err);
+      }
+    });
+
+    // Private Message edit
+    socket.on("editPrivateMessage", async ({ messageId, newText }) => {
+      try {
+        const updated = await PrivateMessage.findByIdAndUpdate(
+          messageId,
+          { message: newText, isEdited: true },
+          { new: true }
+        );
+        // Emit to sender and receiver only
+        Object.entries(onlineUsers).forEach(([socketId, user]) => {
+          if ([updated.sender, updated.receiver].includes(user)) {
+            io.to(socketId).emit("privateMessageEdited", updated);
+          }
+        });
+      } catch (err) {
+        console.error("Edit private message failed:", err);
+      }
+    });
+
+    // Private Message delete
+    socket.on("deletePrivateMessage", async (messageId) => {
+      try {
+        const deleted = await PrivateMessage.findByIdAndDelete(messageId);
+        Object.entries(onlineUsers).forEach(([socketId, user]) => {
+          if ([deleted.sender, deleted.receiver].includes(user)) {
+            io.to(socketId).emit("privateMessageDeleted", messageId);
+          }
+        });
+      } catch (err) {
+        console.error("Delete private message failed:", err);
+      }
+    });
+
 
     socket.on("disconnect", () => {
         console.log("🔴 User Disconnected:", socket.id);

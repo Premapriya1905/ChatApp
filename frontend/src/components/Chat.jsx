@@ -37,6 +37,41 @@ function Chat({ username, onLogout }) {
       }
     });
 
+    // Group message updates
+  socket.on("groupMessageEdited", (updatedMsg) => {
+    setGroupMessages((prev) =>
+      prev.map((msg) => (msg._id === updatedMsg._id ? updatedMsg : msg))
+    );
+  });
+
+  socket.on("groupMessageDeleted", (id) => {
+    setGroupMessages((prev) => prev.filter((msg) => msg._id !== id));
+  });
+
+  // Private message updates
+  socket.on("privateMessageEdited", (updatedMsg) => {
+    const { receiver, sender } = updatedMsg;
+    const chatPartner = sender === username ? receiver : sender;
+
+    setPrivateMessages((prev) => ({
+      ...prev,
+      [chatPartner]: prev[chatPartner].map((msg) =>
+        msg._id === updatedMsg._id ? updatedMsg : msg
+      ),
+    }));
+  });
+
+  socket.on("privateMessageDeleted", (id) => {
+    setPrivateMessages((prev) => {
+      const updated = { ...prev };
+      Object.keys(updated).forEach((key) => {
+        updated[key] = updated[key].filter((msg) => msg._id !== id);
+      });
+      return updated;
+    });
+  });
+
+
     socket.on("chatHistory", (history) => {
       setGroupMessages(history);
     });
