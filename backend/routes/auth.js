@@ -17,12 +17,26 @@ router.post("/register", async (req, res) => {
   }
 
   try {
+    // 🔎 Check if user already exists
+    const existingUser = await User.findOne({ contact: String(contact).trim() });
+    if (existingUser) {
+      return res.status(400).json({ error: "Contact already exists" });
+    }
+
+    // 🔑 Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = await User.create({ username, contact, password: hashedPassword });
+
+    // 👤 Create new user
+    const newUser = await User.create({
+      username,
+      contact: String(contact).trim(),
+      password: hashedPassword,
+    });
+
     res.json({ message: "User registered successfully!" });
   } catch (err) {
     console.error("❌ Registration error:", err);
-    res.status(400).json({ error: "Contact already exists" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -33,30 +47,31 @@ router.post("/login", async (req, res) => {
   try {
     console.log("🔐 Incoming login:", contact);
 
-    // Ensure we treat contact consistently as string
+    // 🔎 Find user
     const user = await User.findOne({ contact: String(contact).trim() });
-
     if (!user) {
       console.log("❌ User not found:", contact);
       return res.status(400).json({ error: "User not found" });
     }
 
+    // 🔑 Check password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       console.log("❌ Wrong password for:", contact);
       return res.status(400).json({ error: "Invalid credentials" });
     }
 
+    // 🎫 Create JWT
     const token = jwt.sign(
       { id: user._id, contact: user.contact },
       JWT_SECRET,
       { expiresIn: "1h" }
     );
 
-    res.json({ 
-      token, 
-      username: user.username, 
-      contact: user.contact 
+    res.json({
+      token,
+      username: user.username,
+      contact: user.contact,
     });
   } catch (err) {
     console.error("🔥 Login error:", err);
