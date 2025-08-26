@@ -6,7 +6,7 @@ import EmojiPicker from "emoji-picker-react";
 import axios from "axios";
 import { Pencil, Trash, SendHorizonal, X } from "lucide-react";
 
-const socket = io("http://localhost:5000");
+const socket = io("https://chatapp-w3k9.onrender.com");
 
 function Chat({ username, onLogout }) {
   const [message, setMessage] = useState("");
@@ -97,7 +97,7 @@ function Chat({ username, onLogout }) {
   const fetchPrivateMessages = async (receiver) => {
     try {
       const res = await axios.get(
-        `http://localhost:5000/privateMessages?user1=${username}&user2=${receiver}`
+        `https://chatapp-w3k9.onrender.com/privateMessages?user1=${username}&user2=${receiver}`
       );
       setPrivateMessages((prev) => ({
         ...prev,
@@ -151,8 +151,8 @@ function Chat({ username, onLogout }) {
     try {
       const url =
         activeChat === "group"
-          ? `http://localhost:5000/messages/group/${editingId}`
-          : `http://localhost:5000/privateMessages/${editingId}`;
+          ? `https://chatapp-w3k9.onrender.com/messages/group/${editingId}`
+          : `https://chatapp-w3k9.onrender.com/privateMessages/${editingId}`;
       const body =
         activeChat === "group" ? { text: message } : { message };
 
@@ -184,8 +184,8 @@ function Chat({ username, onLogout }) {
 
     const url =
       activeChat === "group"
-        ? `http://localhost:5000/messages/group/${id}`
-        : `http://localhost:5000/privateMessages/${id}`;
+        ? `https://chatapp-w3k9.onrender.com/messages/group/${id}`
+        : `https://chatapp-w3k9.onrender.com/privateMessages/${id}`;
 
     try {
       await axios.delete(url);
