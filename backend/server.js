@@ -3,7 +3,9 @@ const http = require('http');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 const { Server } = require('socket.io');
+
 const authRoutes = require("./routes/auth");
 const Message = require('./models/Message');
 const messageRoutes = require("./routes/messages");
@@ -17,19 +19,11 @@ app.use(express.json());
 
 const server = http.createServer(app);
 
+// ✅ Allowed origins (dev + prod)
 const allowedOrigins = [
   "http://localhost:5173", // dev
   "https://flourishing-gaufre-1944d4.netlify.app" // prod
 ];
-
-// ✅ Socket.io with CORS
-const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true
-  }
-});
 
 // ✅ Express CORS middleware
 app.use(cors({
@@ -44,6 +38,9 @@ app.use(cors({
 }));
 
 // ✅ Routes
+app.get('/', (req, res) => res.send('API is running 🚀'));
+app.get('/api/health', (req, res) => res.json({ ok: true }));
+
 app.use("/auth", authRoutes);
 app.use("/messages", messageRoutes);
 app.use("/privateMessages", privateMessagesRoutes);
@@ -52,6 +49,15 @@ app.use("/privateMessages", privateMessagesRoutes);
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch(err => console.error("❌ MongoDB Connection Error:", err));
+
+// ✅ Socket.io with CORS
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
 
 let onlineUsers = {};
 
@@ -171,4 +177,6 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(5000, () => console.log("🚀 Server running on port 5000"));
+// ✅ Use Render's provided port
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
