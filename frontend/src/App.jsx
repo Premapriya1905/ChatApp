@@ -4,10 +4,12 @@ import Register from './components/Register';
 import Chat from './components/Chat';
 
 function App() {
-  const [page, setPage] = useState('register'); // always start at register
+  const [page, setPage] = useState('register');
   const [username, setUsername] = useState(localStorage.getItem('username'));
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check for existing authentication
     const token = localStorage.getItem('token');
     const savedUsername = localStorage.getItem('username');
 
@@ -15,6 +17,8 @@ function App() {
       setUsername(savedUsername);
       setPage('chat');
     }
+    
+    setLoading(false);
   }, []);
 
   const handleLogin = (username) => {
@@ -25,8 +29,23 @@ function App() {
   const handleLogout = () => {
     localStorage.clear();
     setUsername(null);
-    setPage('register'); 
+    setPage('register');
   };
+
+  const handleRegister = () => {
+    setPage('login');
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
+        <div className="text-center text-white">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Loading ChatApp...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!username) {
     return page === 'login' ? (
@@ -36,7 +55,7 @@ function App() {
       />
     ) : (
       <Register
-        onRegister={() => setPage('login')}
+        onRegister={handleRegister}
         onSwitchToLogin={() => setPage('login')}
       />
     );

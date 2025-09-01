@@ -1,12 +1,13 @@
 import io from "socket.io-client";
 import React, { useState, useEffect, useRef } from "react";
 import { BsFillSendFill } from "react-icons/bs";
-import { FaSmile } from "react-icons/fa";
+import { FaSmile, FaUsers, FaUser } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
 import axios from "axios";
-import { Pencil, Trash, SendHorizonal, X } from "lucide-react";
+import { Pencil, Trash, SendHorizonal, X, LogOut, Search } from "lucide-react";
 
-const socket = io("https://chatapp-w3k9.onrender.com");
+const API_BASE = 'https://chatapp-w3k9.onrender.com';
+const socket = io(API_BASE);
 
 function Chat({ username, onLogout }) {
   const [message, setMessage] = useState("");
@@ -18,6 +19,17 @@ function Chat({ username, onLogout }) {
   const [editingMessage, setEditingMessage] = useState("");
   const [activeChat, setActiveChat] = useState("group");
   const [unreadMessages, setUnreadMessages] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [groupMessages, privateMessages]);
 
   useEffect(() => {
     socket.emit("joinChat", username);
@@ -38,39 +50,38 @@ function Chat({ username, onLogout }) {
     });
 
     // Group message updates
-  socket.on("groupMessageEdited", (updatedMsg) => {
-    setGroupMessages((prev) =>
-      prev.map((msg) => (msg._id === updatedMsg._id ? updatedMsg : msg))
-    );
-  });
-
-  socket.on("groupMessageDeleted", (id) => {
-    setGroupMessages((prev) => prev.filter((msg) => msg._id !== id));
-  });
-
-  // Private message updates
-  socket.on("privateMessageEdited", (updatedMsg) => {
-    const { receiver, sender } = updatedMsg;
-    const chatPartner = sender === username ? receiver : sender;
-
-    setPrivateMessages((prev) => ({
-      ...prev,
-      [chatPartner]: prev[chatPartner].map((msg) =>
-        msg._id === updatedMsg._id ? updatedMsg : msg
-      ),
-    }));
-  });
-
-  socket.on("privateMessageDeleted", (id) => {
-    setPrivateMessages((prev) => {
-      const updated = { ...prev };
-      Object.keys(updated).forEach((key) => {
-        updated[key] = updated[key].filter((msg) => msg._id !== id);
-      });
-      return updated;
+    socket.on("groupMessageEdited", (updatedMsg) => {
+      setGroupMessages((prev) =>
+        prev.map((msg) => (msg._id === updatedMsg._id ? updatedMsg : msg))
+      );
     });
-  });
 
+    socket.on("groupMessageDeleted", (id) => {
+      setGroupMessages((prev) => prev.filter((msg) => msg._id !== id));
+    });
+
+    // Private message updates
+    socket.on("privateMessageEdited", (updatedMsg) => {
+      const { receiver, sender } = updatedMsg;
+      const chatPartner = sender === username ? receiver : sender;
+
+      setPrivateMessages((prev) => ({
+        ...prev,
+        [chatPartner]: prev[chatPartner].map((msg) =>
+          msg._id === updatedMsg._id ? updatedMsg : msg
+        ),
+      }));
+    });
+
+    socket.on("privateMessageDeleted", (id) => {
+      setPrivateMessages((prev) => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach((key) => {
+          updated[key] = updated[key].filter((msg) => msg._id !== id);
+        });
+        return updated;
+      });
+    });
 
     socket.on("chatHistory", (history) => {
       setGroupMessages(history);
@@ -85,6 +96,10 @@ function Chat({ username, onLogout }) {
       socket.off("receivePrivateMessage");
       socket.off("chatHistory");
       socket.off("userList");
+      socket.off("groupMessageEdited");
+      socket.off("groupMessageDeleted");
+      socket.off("privateMessageEdited");
+      socket.off("privateMessageDeleted");
     };
   }, [username]);
 
@@ -96,15 +111,18 @@ function Chat({ username, onLogout }) {
 
   const fetchPrivateMessages = async (receiver) => {
     try {
+      setLoading(true);
       const res = await axios.get(
-        `https://chatapp-w3k9.onrender.com/privateMessages?user1=${username}&user2=${receiver}`
+        `${API_BASE}/privateMessages?user1=${username}&user2=${receiver}`
       );
       setPrivateMessages((prev) => ({
         ...prev,
-        [receiver]: res.data,
+        [receiver]: res.data.messages || [],
       }));
     } catch (err) {
       console.error("Failed to fetch private messages:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -139,6 +157,7 @@ function Chat({ username, onLogout }) {
             sender: username,
             receiver: activeChat,
             message,
+            timestamp: new Date(),
           },
         ],
       }));
@@ -151,8 +170,8 @@ function Chat({ username, onLogout }) {
     try {
       const url =
         activeChat === "group"
-          ? `https://chatapp-w3k9.onrender.com/messages/group/${editingId}`
-          : `https://chatapp-w3k9.onrender.com/privateMessages/${editingId}`;
+          ? `${API_BASE}/messages/group/${editingId}`
+          : `${API_BASE}/privateMessages/${editingId}`;
       const body =
         activeChat === "group" ? { text: message } : { message };
 
@@ -160,13 +179,13 @@ function Chat({ username, onLogout }) {
 
       if (activeChat === "group") {
         setGroupMessages((prev) =>
-          prev.map((msg) => (msg._id === editingId ? res.data : msg))
+          prev.map((msg) => (msg._id === editingId ? res.data.data : msg))
         );
       } else {
         setPrivateMessages((prev) => ({
           ...prev,
           [activeChat]: prev[activeChat].map((msg) =>
-            msg._id === editingId ? res.data : msg
+            msg._id === editingId ? res.data.data : msg
           ),
         }));
       }
@@ -175,6 +194,7 @@ function Chat({ username, onLogout }) {
       setMessage("");
     } catch (err) {
       console.error("Edit failed:", err);
+      alert("Failed to edit message. Please try again.");
     }
   };
 
@@ -184,8 +204,8 @@ function Chat({ username, onLogout }) {
 
     const url =
       activeChat === "group"
-        ? `https://chatapp-w3k9.onrender.com/messages/group/${id}`
-        : `https://chatapp-w3k9.onrender.com/privateMessages/${id}`;
+        ? `${API_BASE}/messages/group/${id}`
+        : `${API_BASE}/privateMessages/${id}`;
 
     try {
       await axios.delete(url);
@@ -199,6 +219,7 @@ function Chat({ username, onLogout }) {
       }
     } catch (err) {
       console.error("Delete failed:", err);
+      alert("Failed to delete message. Please try again.");
     }
   };
 
@@ -211,153 +232,257 @@ function Chat({ username, onLogout }) {
     ? groupMessages
     : privateMessages[activeChat] || [];
 
+  const filteredUsers = users.filter(user => 
+    user.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="flex h-screen bg-gray-900 text-white">
+    <div className="flex h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 text-white">
       {/* Sidebar */}
-      <div className="w-1/4 p-4 bg-gray-800 border-r border-gray-700 flex flex-col">
-        <div className="mb-6 flex items-center gap-3 p-3 rounded bg-gray-700">
-          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center font-bold">
-            {username[0].toUpperCase()}
-          </div>
-          <div>
-            <div className="font-semibold">{username}</div>
-            <div className="text-sm text-gray-400">Online</div>
+      <div className="w-80 bg-white/10 backdrop-blur-lg border-r border-white/20 flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b border-white/20">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-white/10">
+            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-lg">
+              {username[0].toUpperCase()}
+            </div>
+            <div>
+              <div className="font-semibold text-lg">{username}</div>
+              <div className="text-sm text-green-400 flex items-center gap-1">
+                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                Online
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="mb-4">
-          <div className="text-xs uppercase text-gray-400 mb-1">Group Chat</div>
+        {/* Search */}
+        <div className="p-4 border-b border-white/20">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search users..."
+              className="w-full pl-10 pr-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Group Chat */}
+        <div className="p-4 border-b border-white/20">
+          <div className="text-xs uppercase text-gray-400 mb-2 flex items-center gap-2">
+            <FaUsers size={12} />
+            Group Chat
+          </div>
           <div
-            className={`p-3 rounded hover:bg-gray-700 cursor-pointer ${
-              activeChat === "group" ? "bg-gray-600" : ""
+            className={`p-3 rounded-lg hover:bg-white/10 cursor-pointer transition-all ${
+              activeChat === "group" ? "bg-blue-500/20 border border-blue-500/50" : ""
             }`}
             onClick={() => setActiveChat("group")}
           >
-            <div className="font-semibold">Curatales</div>
+            <div className="font-semibold flex items-center gap-2">
+              <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center text-sm font-bold">
+                C
+              </div>
+              Curatales
+            </div>
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto">
-          <div className="text-xs uppercase text-gray-400 mb-1">Private Chats</div>
-          {users.map((user) => (
-            <div
-              key={user}
-              className={`p-3 rounded hover:bg-gray-700 cursor-pointer ${
-                activeChat === user ? "bg-gray-600" : ""
-              }`}
-              onClick={() => {
-                setActiveChat(user);
-                setUnreadMessages((prev) => ({ ...prev, [user]: false }));
-              }}
-            >
-              {user}
-              {unreadMessages[user] && (
-                <span className="ml-2 text-xs bg-red-500 px-2 py-0.5 rounded-full">
-                  New
-                </span>
-              )}
+        {/* Private Chats */}
+        <div className="flex-1 overflow-auto p-4">
+          <div className="text-xs uppercase text-gray-400 mb-2 flex items-center gap-2">
+            <FaUser size={12} />
+            Private Chats
+          </div>
+          {filteredUsers.length === 0 ? (
+            <div className="text-gray-400 text-sm text-center py-4">
+              {searchQuery ? 'No users found' : 'No users online'}
             </div>
-          ))}
+          ) : (
+            filteredUsers.map((user) => (
+              <div
+                key={user}
+                className={`p-3 rounded-lg hover:bg-white/10 cursor-pointer transition-all mb-2 ${
+                  activeChat === user ? "bg-purple-500/20 border border-purple-500/50" : ""
+                }`}
+                onClick={() => {
+                  setActiveChat(user);
+                  setUnreadMessages((prev) => ({ ...prev, [user]: false }));
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-sm font-bold">
+                      {user[0].toUpperCase()}
+                    </div>
+                    <span className="font-medium">{user}</span>
+                  </div>
+                  {unreadMessages[user] && (
+                    <span className="text-xs bg-red-500 px-2 py-1 rounded-full">
+                      New
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
-        <button
-          className="mt-4 bg-red-500 text-white px-3 py-1 rounded"
-          onClick={() => {
-            const confirmLogout = window.confirm("Confirm Logout?");
-            if (confirmLogout) onLogout();
-          }}
-        >
-          Logout
-        </button>
+        {/* Logout */}
+        <div className="p-4 border-t border-white/20">
+          <button
+            className="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
+            onClick={() => {
+              const confirmLogout = window.confirm("Are you sure you want to logout?");
+              if (confirmLogout) onLogout();
+            }}
+          >
+            <LogOut size={16} />
+            Logout
+          </button>
+        </div>
       </div>
 
       {/* Chat Window */}
-      <div className="flex flex-col w-3/4 p-4">
-        <div className="flex items-center gap-2 border-b border-gray-700 pb-2 mb-4">
-          <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center font-bold">
-            {activeChat === "group" ? "C" : activeChat[0]?.toUpperCase()}
+      <div className="flex flex-col flex-1">
+        {/* Chat Header */}
+        <div className="p-4 border-b border-white/20 bg-white/5">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center font-bold text-lg">
+              {activeChat === "group" ? "C" : activeChat[0]?.toUpperCase()}
+            </div>
+            <div>
+              <h1 className="text-xl font-bold">
+                {activeChat === "group" ? "Curatales" : activeChat}
+              </h1>
+              <p className="text-sm text-gray-300">
+                {isGroupChat ? "Group Chat" : "Private Chat"}
+              </p>
+            </div>
           </div>
-          <h1 className="text-xl font-bold">
-            {activeChat === "group" ? "Curatales" : activeChat}
-          </h1>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-auto bg-gray-800 p-4 rounded-lg">
+        <div className="flex-1 overflow-auto p-4 space-y-4">
+          {loading && (
+            <div className="flex justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            </div>
+          )}
+          
+          {currentMessages.length === 0 && !loading && (
+            <div className="text-center text-gray-400 py-8">
+              <p>No messages yet. Start the conversation!</p>
+            </div>
+          )}
+
           {currentMessages.map((msg, index) => (
-            <div key={msg._id || `${msg.sender}-${index}`} className="mb-2 flex items-start justify-between">
-              <div>
-                <strong>{msg.sender || msg.username}:</strong>{" "}
-                {editingId === msg._id ? (
-                  <input
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    className="p-1 text-black rounded"
-                  />
-                ) : (
-                  <>
-                    {msg.message || msg.text}
-                    {msg.isEdited && (
-                      <span className="text-xs text-gray-400 ml-2">(edited)</span>
-                    )}
-                  </>
-                )}
+            <div key={msg._id || `${msg.sender}-${index}`} className="flex items-start gap-3">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
+                {(msg.sender || msg.username)?.[0]?.toUpperCase()}
               </div>
-              {msg.sender === username && (
-                <div className="flex gap-2 ml-2">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-semibold text-sm">
+                    {msg.sender || msg.username}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </span>
+                  {msg.isEdited && (
+                    <span className="text-xs text-gray-400">(edited)</span>
+                  )}
+                </div>
+                <div className="bg-white/10 rounded-lg p-3">
                   {editingId === msg._id ? (
-                    <X
-                      size={18}
-                      className="cursor-pointer text-red-400"
+                    <input
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      className="w-full p-2 text-black rounded border focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                    />
+                  ) : (
+                    <p className="text-sm">{msg.message || msg.text}</p>
+                  )}
+                </div>
+              </div>
+              {(msg.sender === username || msg.username === username) && (
+                <div className="flex gap-1">
+                  {editingId === msg._id ? (
+                    <button
                       onClick={() => {
                         setEditingId(null);
                         setMessage("");
                       }}
-                    />
+                      className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
                   ) : (
-                    <Pencil
-                      size={18}
-                      className="cursor-pointer text-yellow-400"
+                    <button
                       onClick={() => {
                         setEditingId(msg._id);
                         setMessage(msg.message || msg.text);
                       }}
-                    />
+                      className="p-1 text-yellow-400 hover:text-yellow-300 transition-colors"
+                    >
+                      <Pencil size={16} />
+                    </button>
                   )}
-                  <Trash
-                    size={18}
-                    className="cursor-pointer text-red-400"
+                  <button
                     onClick={() => deleteMessage(msg._id)}
-                  />
+                    className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                  >
+                    <Trash size={16} />
+                  </button>
                 </div>
               )}
             </div>
           ))}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Input */}
-        <div className="mt-4 flex gap-2 items-center relative">
-          <button className="p-2" onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
-            <FaSmile size={24} />
-          </button>
-          {showEmojiPicker && (
-            <div className="absolute bottom-16 bg-gray-800 rounded p-2 z-10">
-              <EmojiPicker onEmojiClick={handleEmojiClick} />
+        <div className="p-4 border-t border-white/20 bg-white/5">
+          <div className="flex gap-3 items-end">
+            <button 
+              className="p-2 text-gray-400 hover:text-white transition-colors"
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            >
+              <FaSmile size={20} />
+            </button>
+            
+            <div className="flex-1 relative">
+              {showEmojiPicker && (
+                <div className="absolute bottom-full mb-2 z-10">
+                  <EmojiPicker onEmojiClick={handleEmojiClick} />
+                </div>
+              )}
+              <input
+                type="text"
+                className="w-full p-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                placeholder={`Type a message to ${isGroupChat ? 'the group' : activeChat}...`}
+              />
             </div>
-          )}
-          <input
-            type="text"
-            className="flex-1 p-2 rounded bg-gray-700 border border-gray-600"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") sendMessage();
-            }}
-            placeholder="Type a message..."
-          />
-          <button className="bg-blue-500 p-3 rounded" onClick={sendMessage}>
-            {editingId ? <SendHorizonal /> : <BsFillSendFill size={20} />}
-          </button>
+            
+            <button 
+              className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 rounded-lg transition-all transform hover:scale-105"
+              onClick={sendMessage}
+            >
+              {editingId ? <SendHorizonal size={20} /> : <BsFillSendFill size={20} />}
+            </button>
+          </div>
         </div>
       </div>
     </div>
