@@ -1,8 +1,9 @@
 {
-  "name": "chatapp",
+  "name": "chatapp-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.0.0",
   "type": "module",
+  "description": "Real-time chat application frontend built with React and Socket.io",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -13,7 +14,6 @@
     "@tailwindcss/vite": "^4.1.3",
     "axios": "^1.8.4",
     "emoji-picker-react": "^4.12.2",
-    "express": "^5.1.0",
     "lucide-react": "^0.487.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -31,5 +31,19 @@
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^15.15.0",
     "vite": "^6.2.0"
+  },
+  "keywords": [
+    "chat",
+    "react",
+    "socket.io",
+    "real-time",
+    "messaging",
+    "frontend"
+  ],
+  "author": "ChatApp Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
   }
 }
