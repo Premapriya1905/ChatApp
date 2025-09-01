@@ -139,6 +139,17 @@ function Chat({ username, onLogout }) {
         sender: username,
         text: message,
       });
+      
+      // Optimistic local update for group messages only
+      setGroupMessages((prev) => [
+        ...prev,
+        {
+          _id: Date.now().toString(), // temporary ID
+          sender: username,
+          message: message,
+          timestamp: new Date(),
+        },
+      ]);
     } else {
       socket.emit("sendPrivateMessage", {
         sender: username,
@@ -147,27 +158,22 @@ function Chat({ username, onLogout }) {
       });
     }
 
-    // Optimistic local update
-    if (!isGroupChat) {
-      setPrivateMessages((prev) => ({
-        ...prev,
-        [activeChat]: [
-          ...(prev[activeChat] || []),
-          {
-            sender: username,
-            receiver: activeChat,
-            message,
-            timestamp: new Date(),
-          },
-        ],
-      }));
-    }
-
     setMessage("");
   };
 
   const handleUpdateMessage = async () => {
     try {
+      // Check if the message ID is a temporary one (from optimistic updates)
+      if (editingId && editingId.toString().length < 20) {
+        // This is a temporary ID, remove the optimistic update
+        if (activeChat === "group") {
+          setGroupMessages((prev) => prev.filter((msg) => msg._id !== editingId));
+        }
+        setEditingId(null);
+        setMessage("");
+        return;
+      }
+
       const url =
         activeChat === "group"
           ? `${API_BASE}/messages/group/${editingId}`
@@ -177,24 +183,22 @@ function Chat({ username, onLogout }) {
 
       const res = await axios.put(url, body);
 
+      // Emit socket events for real-time updates
       if (activeChat === "group") {
-        setGroupMessages((prev) =>
-          prev.map((msg) => (msg._id === editingId ? res.data.data : msg))
-        );
+        socket.emit("editGroupMessage", { messageId: editingId, newText: message });
       } else {
-        setPrivateMessages((prev) => ({
-          ...prev,
-          [activeChat]: prev[activeChat].map((msg) =>
-            msg._id === editingId ? res.data.data : msg
-          ),
-        }));
+        socket.emit("editPrivateMessage", { messageId: editingId, newText: message });
       }
 
       setEditingId(null);
       setMessage("");
     } catch (err) {
       console.error("Edit failed:", err);
-      alert("Failed to edit message. Please try again.");
+      if (err.response?.status === 400) {
+        alert("Invalid message ID. Please try again.");
+      } else {
+        alert("Failed to edit message. Please try again.");
+      }
     }
   };
 
@@ -202,13 +206,9 @@ function Chat({ username, onLogout }) {
     const confirmDelete = window.confirm("Are you sure you want to delete this message?");
     if (!confirmDelete) return;
 
-    const url =
-      activeChat === "group"
-        ? `${API_BASE}/messages/group/${id}`
-        : `${API_BASE}/privateMessages/${id}`;
-
-    try {
-      await axios.delete(url);
+    // Check if the message ID is a temporary one (from optimistic updates)
+    if (id && id.toString().length < 20) {
+      // This is a temporary ID, just remove it locally
       if (activeChat === "group") {
         setGroupMessages((prev) => prev.filter((msg) => msg._id !== id));
       } else {
@@ -217,9 +217,30 @@ function Chat({ username, onLogout }) {
           [activeChat]: prev[activeChat].filter((msg) => msg._id !== id),
         }));
       }
+      return;
+    }
+
+    const url =
+      activeChat === "group"
+        ? `${API_BASE}/messages/group/${id}`
+        : `${API_BASE}/privateMessages/${id}`;
+
+    try {
+      await axios.delete(url);
+      
+      // Emit socket events for real-time updates
+      if (activeChat === "group") {
+        socket.emit("deleteGroupMessage", id);
+      } else {
+        socket.emit("deletePrivateMessage", id);
+      }
     } catch (err) {
       console.error("Delete failed:", err);
-      alert("Failed to delete message. Please try again.");
+      if (err.response?.status === 400) {
+        alert("Invalid message ID. Please try again.");
+      } else {
+        alert("Failed to delete message. Please try again.");
+      }
     }
   };
 
