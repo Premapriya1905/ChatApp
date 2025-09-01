@@ -245,7 +245,7 @@ io.on('connection', (socket) => {
         const { sender, receiver } = updatedMessage;
         
         // Send to both sender and receiver
-        Object.entries(onlineUsers).forEach(([socketId, user]) => {
+        onlineUsers.forEach((user, socketId) => {
           if (user === sender || user === receiver) {
             io.to(socketId).emit('privateMessageEdited', updatedMessage);
           }
@@ -267,7 +267,7 @@ io.on('connection', (socket) => {
         const { sender, receiver } = deletedMessage;
         
         // Send to both sender and receiver
-        Object.entries(onlineUsers).forEach(([socketId, user]) => {
+        onlineUsers.forEach((user, socketId) => {
           if (user === sender || user === receiver) {
             io.to(socketId).emit('privateMessageDeleted', messageId);
           }
