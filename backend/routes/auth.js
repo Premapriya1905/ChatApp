@@ -219,6 +219,27 @@ router.get('/profile', verifyToken, async (req, res) => {
   }
 });
 
+// Get all users (for chat list)
+router.get('/users', verifyToken, async (req, res) => {
+  try {
+    const users = await User.find().select('username contact').lean();
+    
+    // Filter out the current user
+    const filteredUsers = users.filter(user => user._id.toString() !== req.user.userId);
+    
+    res.json({
+      users: filteredUsers,
+      total: filteredUsers.length
+    });
+  } catch (error) {
+    console.error('❌ Error fetching users:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch users',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Health check for auth routes
 router.get('/health', (req, res) => {
   res.json({ 

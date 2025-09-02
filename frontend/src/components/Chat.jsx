@@ -14,6 +14,7 @@ function Chat({ username, onLogout }) {
   const [groupMessages, setGroupMessages] = useState([]);
   const [privateMessages, setPrivateMessages] = useState({});
   const [users, setUsers] = useState([]);
+  const [onlineUsers, setOnlineUsers] = useState([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingMessage, setEditingMessage] = useState("");
@@ -32,6 +33,9 @@ function Chat({ username, onLogout }) {
   }, [groupMessages, privateMessages]);
 
   useEffect(() => {
+    // Fetch all registered users
+    fetchAllUsers();
+    
     socket.emit("joinChat", username);
 
     socket.on("receiveMessage", (msg) => {
@@ -39,13 +43,28 @@ function Chat({ username, onLogout }) {
     });
 
     socket.on("receivePrivateMessage", (msg) => {
-      setPrivateMessages((prev) => ({
-        ...prev,
-        [msg.sender]: [...(prev[msg.sender] || []), msg],
-      }));
+      // Determine the chat partner (the other person in the conversation)
+      const chatPartner = msg.sender === username ? msg.receiver : msg.sender;
+      
+      setPrivateMessages((prev) => {
+        const existingMessages = prev[chatPartner] || [];
+        
+        // Check if message already exists to prevent duplicates
+        const messageExists = existingMessages.some(m => 
+          m._id === msg._id || 
+          (m.sender === msg.sender && m.message === msg.message && Math.abs(new Date(m.timestamp) - new Date(msg.timestamp)) < 1000)
+        );
+        
+        if (messageExists) return prev;
+        
+        return {
+          ...prev,
+          [chatPartner]: [...existingMessages, msg],
+        };
+      });
     
-      if (msg.sender !== activeChat) {
-        setUnreadMessages((prev) => ({ ...prev, [msg.sender]: true }));
+      if (chatPartner !== activeChat) {
+        setUnreadMessages((prev) => ({ ...prev, [chatPartner]: true }));
       }
     });
 
@@ -87,8 +106,8 @@ function Chat({ username, onLogout }) {
       setGroupMessages(history);
     });
 
-    socket.on("userList", (onlineUsers) => {
-      setUsers(onlineUsers.filter((u) => u !== username));
+    socket.on("userList", (onlineUsersList) => {
+      setOnlineUsers(onlineUsersList.filter((u) => u !== username));
     });
 
     return () => {
@@ -99,9 +118,32 @@ function Chat({ username, onLogout }) {
       socket.off("groupMessageEdited");
       socket.off("groupMessageDeleted");
       socket.off("privateMessageEdited");
-      socket.off("privateMessageDeleted");
-    };
-  }, [username]);
+          socket.off("privateMessageDeleted");
+  };
+}, [username]);
+
+  // Function to fetch all registered users
+  const fetchAllUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      const response = await axios.get(`${API_BASE}/auth/users`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      setUsers(response.data.users);
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+    }
+  };
+
+  // Fetch all users when component mounts
+  useEffect(() => {
+    fetchAllUsers();
+  }, []);
 
   useEffect(() => {
     if (activeChat !== "group") {
@@ -139,23 +181,27 @@ function Chat({ username, onLogout }) {
         sender: username,
         text: message,
       });
-      
-      // Optimistic local update for group messages only
-      setGroupMessages((prev) => [
-        ...prev,
-        {
-          _id: Date.now().toString(), // temporary ID
-          sender: username,
-          message: message,
-          timestamp: new Date(),
-        },
-      ]);
+      // Remove optimistic update to prevent duplicates
     } else {
       socket.emit("sendPrivateMessage", {
         sender: username,
         receiver: activeChat,
         message,
       });
+      
+      // Add optimistic update for private messages so sender sees their message immediately
+      const tempMessage = {
+        _id: Date.now().toString(),
+        sender: username,
+        receiver: activeChat,
+        message: message,
+        timestamp: new Date(),
+      };
+      
+      setPrivateMessages((prev) => ({
+        ...prev,
+        [activeChat]: [...(prev[activeChat] || []), tempMessage],
+      }));
     }
 
     setMessage("");
@@ -183,7 +229,21 @@ function Chat({ username, onLogout }) {
 
       const res = await axios.put(url, body);
 
-      // Emit socket events for real-time updates
+      // Update local state immediately for real-time editing
+      if (activeChat === "group") {
+        setGroupMessages((prev) =>
+          prev.map((msg) => (msg._id === editingId ? res.data.data : msg))
+        );
+      } else {
+        setPrivateMessages((prev) => ({
+          ...prev,
+          [activeChat]: prev[activeChat].map((msg) =>
+            msg._id === editingId ? res.data.data : msg
+          ),
+        }));
+      }
+
+      // Emit socket events for real-time updates to other users
       if (activeChat === "group") {
         socket.emit("editGroupMessage", { messageId: editingId, newText: message });
       } else {
@@ -228,7 +288,17 @@ function Chat({ username, onLogout }) {
     try {
       await axios.delete(url);
       
-      // Emit socket events for real-time updates
+      // Update local state immediately for real-time deletion
+      if (activeChat === "group") {
+        setGroupMessages((prev) => prev.filter((msg) => msg._id !== id));
+      } else {
+        setPrivateMessages((prev) => ({
+          ...prev,
+          [activeChat]: prev[activeChat].filter((msg) => msg._id !== id),
+        }));
+      }
+      
+      // Emit socket events for real-time updates to other users
       if (activeChat === "group") {
         socket.emit("deleteGroupMessage", id);
       } else {
@@ -254,8 +324,13 @@ function Chat({ username, onLogout }) {
     : privateMessages[activeChat] || [];
 
   const filteredUsers = users.filter(user => 
-    user.toLowerCase().includes(searchQuery.toLowerCase())
+    user.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Function to check if a user is online
+  const isUserOnline = (username) => {
+    return onlineUsers.includes(username);
+  };
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 text-white">
@@ -320,28 +395,33 @@ function Chat({ username, onLogout }) {
           </div>
           {filteredUsers.length === 0 ? (
             <div className="text-gray-400 text-sm text-center py-4">
-              {searchQuery ? 'No users found' : 'No users online'}
+              {searchQuery ? 'No users found' : 'No users registered'}
             </div>
           ) : (
             filteredUsers.map((user) => (
               <div
-                key={user}
+                key={user.username}
                 className={`p-3 rounded-lg hover:bg-white/10 cursor-pointer transition-all mb-2 ${
-                  activeChat === user ? "bg-purple-500/20 border border-purple-500/50" : ""
+                  activeChat === user.username ? "bg-purple-500/20 border border-purple-500/50" : ""
                 }`}
                 onClick={() => {
-                  setActiveChat(user);
-                  setUnreadMessages((prev) => ({ ...prev, [user]: false }));
+                  setActiveChat(user.username);
+                  setUnreadMessages((prev) => ({ ...prev, [user.username]: false }));
                 }}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-sm font-bold">
-                      {user[0].toUpperCase()}
+                      {user.username[0].toUpperCase()}
                     </div>
-                    <span className="font-medium">{user}</span>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{user.username}</span>
+                      <span className={`text-xs ${isUserOnline(user.username) ? 'text-green-400' : 'text-gray-400'}`}>
+                        {isUserOnline(user.username) ? 'Online' : 'Offline'}
+                      </span>
+                    </div>
                   </div>
-                  {unreadMessages[user] && (
+                  {unreadMessages[user.username] && (
                     <span className="text-xs bg-red-500 px-2 py-1 rounded-full">
                       New
                     </span>
