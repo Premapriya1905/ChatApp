@@ -128,19 +128,6 @@ NODE_ENV=development
 VITE_API_BASE=http://localhost:5000
 ```
 
-## 🚀 Deployment
-
-### Backend Deployment (Render)
-1. Connect your GitHub repository to Render
-2. Set environment variables in Render dashboard
-3. Deploy as a Node.js service
-
-### Frontend Deployment (Netlify/Vercel)
-1. Connect your GitHub repository
-2. Set build command: `npm run build`
-3. Set publish directory: `dist`
-4. Add environment variables
-
 ## 📱 Usage
 
 1. **Register**: Create a new account with your name, contact number, and password
@@ -177,18 +164,6 @@ VITE_API_BASE=http://localhost:5000
 3. Make your changes
 4. Test thoroughly
 5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
-## 🆘 Support
-
-If you encounter any issues or have questions, please:
-1. Check the console for error messages
-2. Verify your environment variables
-3. Ensure MongoDB is running
-4. Check network connectivity
 
 ## 🔄 Updates
 
