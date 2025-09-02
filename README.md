@@ -3,7 +3,7 @@
 A modern, real-time chat application built with React, Node.js, Socket.io, and MongoDB. Features include group chat, private messaging, message editing/deletion, and a beautiful UI.
 
 Render Link - [ https://chatapp-w3k9.onrender.com ]
-Netlify Link - 
+Netlify Link - [ https://resplendent-beignet-9b5f46.netlify.app/ ]
 
 ## 🚀 Features
 
