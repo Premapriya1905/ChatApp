@@ -29,7 +29,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:3000',
-  'https://resplendent-beignet-9b5f46.netlify.app/'
+  'https://resplendent-beignet-9b5f46.netlify.app'
 ];
 
 app.use(cors({
