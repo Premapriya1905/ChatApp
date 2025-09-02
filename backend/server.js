@@ -30,7 +30,6 @@ const allowedOrigins = [
   'http://localhost:5174',
   'http://localhost:3000',
   'https://flourishing-gaufre-1944d4.netlify.app',
-  'https://your-frontend-domain.com' // Add your frontend domain
 ];
 
 app.use(cors({

@@ -2,6 +2,13 @@
 
 A modern, real-time chat application built with React, Node.js, Socket.io, and MongoDB. Features include group chat, private messaging, message editing/deletion, and a beautiful UI.
 
+## 🔗 Live Demo
+
+- Frontend (Netlify): https://YOUR_NETLIFY_SITE.netlify.app
+- Backend API (Render): https://chatapp-w3k9.onrender.com
+
+Tip: Verify the backend is healthy: `https://chatapp-w3k9.onrender.com/auth/health`
+
 ## 🚀 Features
 
 - **Real-time Messaging**: Instant message delivery using Socket.io
@@ -100,6 +107,7 @@ npm run dev
 - `POST /auth/register` - Register a new user
 - `POST /auth/login` - Login user
 - `GET /auth/profile` - Get user profile (protected)
+- `GET /auth/users` - List all users (protected)
 
 ### Group Messages
 - `GET /messages/group` - Get all group messages
@@ -141,12 +149,25 @@ VITE_API_BASE=http://localhost:5000
 3. Set publish directory: `dist`
 4. Add environment variables
 
+## ✅ Final Deployment Checklist
+
+- [ ] Frontend `.env` has `VITE_API_BASE` set to your Render URL (e.g., `https://chatapp-w3k9.onrender.com`).
+- [ ] Backend `.env` has valid `MONGODB_URI` and `JWT_SECRET` set in Render.
+- [ ] CORS allows your Netlify domain in `backend/server.js` `allowedOrigins`.
+- [ ] Backend health check returns OK: `GET /auth/health`.
+- [ ] Login and registration succeed against the deployed API.
+- [ ] Group chat: send/edit/delete work without duplicates.
+- [ ] Private chat: can send/edit/delete even if recipient is offline.
+- [ ] Real-time updates (edit/delete) reflect across users without page refresh.
+- [ ] Users list shows all users (online/offline indicators present).
+- [ ] Netlify site loads and connects to the Render API without CORS errors.
+
 ## 📱 Usage
 
 1. **Register**: Create a new account with your name, contact number, and password
 2. **Login**: Sign in with your credentials
 3. **Group Chat**: Join the public chat room "Curatales"
-4. **Private Chat**: Click on any online user to start a private conversation
+4. **Private Chat**: Click any user to start a private conversation (works even if they are offline)
 5. **Send Messages**: Type your message and press Enter or click the send button
 6. **Edit/Delete**: Use the edit and delete buttons on your own messages
 7. **Emojis**: Click the emoji button to add emojis to your messages
